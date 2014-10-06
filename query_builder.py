@@ -20,93 +20,105 @@ class QueryBuilder(object):
             self.space = " "
 
         # SELECT
-        self.__from_table = list()
-        self.__field = list()
-        self.__where = list()
-        self.__join = list()
-        self.__order = list()
-        self.__group_by = list()
-        self.__having = list()
+        self._from_table = list()
+        self._field = list()
+        self._where = list()
+        self._join = list()
+        self._order = list()
+        self._group_by = list()
+        self._having = list()
+        self._limit = -1
+        self._start = -1
 
         # INSERT
-        self.__to_table = ""
-        self.__value = list()
+        self._to_table = ""
+        self._value = list()
 
     def select(self, table):
-        self.__from_table.append(table)
+        self._from_table.append(table)
         self.operand = "SELECT"
 
         return self
 
     def insert(self, table):
         self.operand = "INSERT"
-        self.__to_table = table
+        self._to_table = table
 
         return self
 
     def delete(self, table):
         self.operand = "DELETE"
-        self.__to_table = table
+        self._to_table = table
 
         return self
 
     def where(self, lhs, op, rhs):
-        self.__where.append(('AND', lhs, op, rhs))
+        self._where.append(('AND', lhs, op, rhs))
 
         return self
 
     def or_where(self, lhs, op, rhs):
-        self.__where.append(('OR ', lhs, op, rhs))
+        self._where.append(('OR ', lhs, op, rhs))
 
         return self
 
     def join(self, join_table, lhs, op, rhs):
-        self.__join.append(('INNER', join_table, lhs, op, rhs))
+        self._join.append(('INNER', join_table, lhs, op, rhs))
 
         return self
 
     def left_join(self, join_table, lhs, op, rhs):
-        self.__join.append(('LEFT', join_table, lhs, op, rhs))
+        self._join.append(('LEFT', join_table, lhs, op, rhs))
 
         return self
 
     def right_join(self, join_table, lhs, op, rhs):
-        self.__join.append(('RIGHT', join_table, lhs, op, rhs))
+        self._join.append(('RIGHT', join_table, lhs, op, rhs))
 
         return self
 
     def outer_join(self, join_table, lhs, op, rhs):
-        self.__join.append(('OUTER', join_table, lhs, op, rhs))
+        self._join.append(('OUTER', join_table, lhs, op, rhs))
 
         return self
 
     def group_by(self, field):
-        self.__group_by.append(field)
+        self._group_by.append(field)
 
         return self
 
     def having(self, lhs, op, rhs):
-        self.__having.append(('AND', lhs, op, rhs))
+        self._having.append(('AND', lhs, op, rhs))
 
         return self
 
     def or_having(self, lhs, op, rhs):
-        self.__having.append(('OR ', lhs, op, rhs))
+        self._having.append(('OR ', lhs, op, rhs))
 
         return self
 
     def order(self, order_field, direction="ASC"):
-        self.__order.append((order_field, direction))
+        self._order.append((order_field, direction))
+
+        return self
+
+    def limit(self, limit):
+        self._limit = limit
+
+        return self
+
+    def range_start(self, start):
+        self._start = start
 
         return self
 
     def field(self, field):
         if isinstance(field, list) or isinstance(field, tuple):
             for f in field:
-                self.__field.append(f)
+                self._field.append(f)
 
         else:
-            self.__field.append(field)
+            self._field.append(field)
 
         return self
 
@@ -119,15 +131,15 @@ class QueryBuilder(object):
         if not value.endswith(')'):
             value += ')'
 
-        self.__value.append(value)
+        self._value.append(value)
 
         return self
 
     def build(self):
         operand_builder = {
-            "SELECT": self.__build_select,
-            "INSERT": self.__build_insert,
-            "DELETE": self.__build_delete
+            "SELECT": self.build_select,
+            "INSERT": self.build_insert,
+            "DELETE": self.build_delete
         }
 
         if self.operand not in operand_builder:
@@ -137,21 +149,21 @@ class QueryBuilder(object):
 
         return result
 
-    def __build_select(self):
+    def build_select(self):
         build_sql = "SELECT "
 
-        if len(self.__field) == 0:
+        if len(self._field) == 0:
             build_sql += "*"
         else:
-            build_sql += ", ".join(self.__field)
+            build_sql += ", ".join(self._field)
 
         build_sql += self.space
         build_sql += " FROM "
-        build_sql += ", ".join(self.__from_table)
+        build_sql += ", ".join(self._from_table)
         build_sql += self.space
 
-        if len(self.__join) > 0:
-            for join_type, join_table, lhs, op, rhs in self.__join:
+        if len(self._join) > 0:
+            for join_type, join_table, lhs, op, rhs in self._join:
                 build_sql += " {join_type} JOIN {join_table} ON {lhs} {op} {rhs} ".format(
                     join_type=join_type,
                     join_table=join_table,
@@ -160,11 +172,11 @@ class QueryBuilder(object):
 
                 build_sql += self.space
 
-        if len(self.__where) > 0:
+        if len(self._where) > 0:
             build_sql += " WHERE "
             where_sql = ""
 
-            for and_or, lhs, op, rhs in self.__where:
+            for and_or, lhs, op, rhs in self._where:
                 where_sql += " {and_or} {lhs} {op} {rhs}".format(
                     and_or=and_or,
                     lhs=lhs, op=op, rhs=rhs
@@ -173,12 +185,12 @@ class QueryBuilder(object):
 
             build_sql += where_sql[4:]
 
-        if len(self.__group_by) > 0:
+        if len(self._group_by) > 0:
             build_sql += " GROUP BY "
-            build_sql += ", ".join(self.__group_by)
+            build_sql += ", ".join(self._group_by)
             having_sql = ""
 
-            for and_or, lhs, op, rhs in self.__having:
+            for and_or, lhs, op, rhs in self._having:
                 having_sql += " {and_or} {lhs} {op} {rhs}".format(
                     and_or=and_or,
                     lhs=lhs, op=op, rhs=rhs
@@ -187,20 +199,25 @@ class QueryBuilder(object):
 
             build_sql += having_sql[4:]
 
-        if len(self.__order) > 0:
+        if len(self._order) > 0:
             build_sql += " ORDER BY "
-            orders = ["{field} {asc}".format(field=field, asc=asc) for field, asc in self.__order]
+            orders = ["{field} {asc}".format(field=field, asc=asc) for field, asc in self._order]
 
             build_sql += ", ".join(orders)
 
+        if self._limit > 0 and self._start == -1:
+            build_sql += " LIMIT %d " % self._limit
+        elif self._start >= 0 and self._limit > 0:
+            build_sql += " LIMIT %d, %d" % (self._start, self._limit)
+
         return build_sql
 
-    def __build_insert(self):
-        build_sql = "INSERT INTO {table} ".format(table=self.__to_table)
+    def build_insert(self):
+        build_sql = "INSERT INTO {table} ".format(table=self._to_table)
 
-        if len(self.__field) > 0:
+        if len(self._field) > 0:
             build_sql += "("
-            build_sql += ", ".join(self.__field)
+            build_sql += ", ".join(self._field)
             build_sql += ")"
 
         build_sql += self.space
@@ -208,20 +225,20 @@ class QueryBuilder(object):
         build_sql += self.space
 
         if self.pretty_print:
-            build_sql += (", %s" % self.space).join(self.__value)
+            build_sql += (", %s" % self.space).join(self._value)
         else:
-            build_sql += ", ".join(self.__value)
+            build_sql += ", ".join(self._value)
 
         return build_sql
 
-    def __build_delete(self):
-        build_sql = "DELETE FROM {table}".format(table=self.__to_table)
+    def build_delete(self):
+        build_sql = "DELETE FROM {table}".format(table=self._to_table)
 
-        if len(self.__where) > 0:
+        if len(self._where) > 0:
             build_sql += " WHERE "
             where_sql = ""
 
-            for and_or, lhs, op, rhs in self.__where:
+            for and_or, lhs, op, rhs in self._where:
                 where_sql += " {and_or} {lhs} {op} {rhs}".format(
                     and_or=and_or,
                     lhs=lhs, op=op, rhs=rhs
